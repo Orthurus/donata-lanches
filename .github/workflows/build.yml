@@ -30,7 +30,12 @@ jobs:
           sudo apt-get install -y zip unzip git autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev build-essential libltdl-dev
           pip install buildozer==1.5.0 cython==0.29.36
       - name: Gerar APK
-        run: buildozer -v android debug
+        run: |
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build.log
+      - name: Resumo do erro
+        if: failure()
+        run: grep -n -i -B3 -A10 -E "Traceback|error:|CommandNotFound|fatal|FAILED" build.log | tail -90
       - uses: actions/upload-artifact@v4
         with:
           name: apk
