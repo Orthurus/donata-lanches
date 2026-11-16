@@ -1,0 +1,70 @@
+name: Gerar APK e EXE
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da release (ex: v1.4)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip git autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev build-essential libltdl-dev
+          pip install buildozer==1.5.0 cython==0.29.36
+      - name: Gerar APK
+        run: buildozer -v android debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: bin/*.apk
+
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Gerar EXE
+        run: |
+          pip install pyinstaller "qrcode[pil]"
+          pyinstaller --clean --noconfirm --onefile --windowed --icon donata.ico --name "DoNata Servidor" donata_servidor.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: dist/DoNata Servidor.exe
+
+  publicar:
+    needs: [apk, exe]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: saida
+      - name: Anexar na release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mv saida/apk/*.apk saida/donata.apk
+          cp "saida/exe/DoNata Servidor.exe" "saida/DoNata Servidor.exe"
+          gh release upload "$TAG" saida/donata.apk "saida/DoNata Servidor.exe" --clobber
